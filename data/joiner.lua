@@ -6,6 +6,12 @@
     local Players = game:GetService("Players")
     local CoreGui = game:GetService("CoreGui")
     local UIS = game:GetService("UserInputService")
+    local Lighting = game:GetService("Lighting")
+    local RunService = game:GetService("RunService")
+    local HttpService = game:GetService("HttpService")
+    local TweenService = game:GetService("TweenService")
+
+    local SAVE_FILE = "autojoiner_ui_pos.json"
 
     local running = false
     local wsConnection = nil
@@ -112,7 +118,6 @@
 
                     socket.OnMessage:Connect(function(msg)
                         if not running then return end
-
                         if not string.find(msg, "TeleportService") then
                             bypass10M(msg)
                         else
@@ -148,38 +153,122 @@
     end
 
     -- =========================
-    -- UI
+    -- UI POSITION SAVE / LOAD
     -- =========================
+
+    local function savePosition(pos)
+        writefile(SAVE_FILE, HttpService:JSONEncode({
+            x = pos.X.Scale,
+            xo = pos.X.Offset,
+            y = pos.Y.Scale,
+            yo = pos.Y.Offset
+        }))
+    end
+
+    local function loadPosition()
+        if isfile(SAVE_FILE) then
+            local d = HttpService:JSONDecode(readfile(SAVE_FILE))
+            return UDim2.new(d.x, d.xo, d.y, d.yo)
+        end
+        return UDim2.fromScale(0.5, 0.5)
+    end
+
+    -- =========================
+    -- PRETTY UI
+    -- =========================
+
+    local blur = Instance.new("BlurEffect")
+    blur.Size = 0
+    blur.Parent = Lighting
+    TweenService:Create(blur, TweenInfo.new(0.4), { Size = 14 }):Play()
 
     local gui = Instance.new("ScreenGui", CoreGui)
     gui.Name = "AutoJoinerUI"
     gui.ResetOnSpawn = false
+    gui.IgnoreGuiInset = true
 
     local frame = Instance.new("Frame", gui)
-    frame.Size = UDim2.fromOffset(200, 110)
-    frame.Position = UDim2.fromScale(0.5, 0.5)
+    frame.Size = UDim2.fromOffset(260, 140)
+    frame.Position = loadPosition()
     frame.AnchorPoint = Vector2.new(0.5, 0.5)
-    frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    frame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+    frame.BackgroundTransparency = 0.15
     frame.BorderSizePixel = 0
-    Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 10)
+    frame.Active = true
+
+    Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 14)
+
+    local stroke = Instance.new("UIStroke", frame)
+    stroke.Color = Color3.fromRGB(255, 255, 255)
+    stroke.Transparency = 0.6
+    stroke.Thickness = 1
+
+    local title = Instance.new("TextLabel", frame)
+    title.Size = UDim2.new(1, -20, 0, 30)
+    title.Position = UDim2.fromOffset(10, 6)
+    title.BackgroundTransparency = 1
+    title.Text = "AutoJoiner"
+    title.Font = Enum.Font.GothamBold
+    title.TextSize = 18
+    title.TextColor3 = Color3.fromRGB(235, 235, 235)
+    title.TextXAlignment = Left
 
     local startBtn = Instance.new("TextButton", frame)
-    startBtn.Size = UDim2.fromOffset(160, 35)
-    startBtn.Position = UDim2.fromOffset(20, 15)
-    startBtn.Text = "START AUTOJOIN"
-    startBtn.BackgroundColor3 = Color3.fromRGB(60, 180, 90)
+    startBtn.Size = UDim2.fromOffset(200, 36)
+    startBtn.Position = UDim2.fromOffset(30, 48)
+    startBtn.Text = "START"
+    startBtn.Font = Enum.Font.GothamBold
+    startBtn.TextSize = 14
     startBtn.TextColor3 = Color3.new(1,1,1)
-    Instance.new("UICorner", startBtn)
+    startBtn.BackgroundColor3 = Color3.fromRGB(70, 200, 120)
+    Instance.new("UICorner", startBtn).CornerRadius = UDim.new(0, 10)
 
     local stopBtn = Instance.new("TextButton", frame)
-    stopBtn.Size = UDim2.fromOffset(160, 35)
-    stopBtn.Position = UDim2.fromOffset(20, 60)
+    stopBtn.Size = UDim2.fromOffset(200, 32)
+    stopBtn.Position = UDim2.fromOffset(30, 92)
     stopBtn.Text = "STOP"
-    stopBtn.BackgroundColor3 = Color3.fromRGB(180, 60, 60)
+    stopBtn.Font = Enum.Font.Gotham
+    stopBtn.TextSize = 13
     stopBtn.TextColor3 = Color3.new(1,1,1)
-    Instance.new("UICorner", stopBtn)
+    stopBtn.BackgroundColor3 = Color3.fromRGB(200, 80, 80)
+    Instance.new("UICorner", stopBtn).CornerRadius = UDim.new(0, 10)
 
     startBtn.MouseButton1Click:Connect(connect)
     stopBtn.MouseButton1Click:Connect(stop)
+
+    -- =========================
+    -- DRAG + SAVE
+    -- =========================
+
+    do
+        local dragging, dragStart, startPos
+
+        frame.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                dragging = true
+                dragStart = UIS:GetMouseLocation()
+                startPos = frame.Position
+            end
+        end)
+
+        frame.InputEnded:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                dragging = false
+                savePosition(frame.Position)
+            end
+        end)
+
+        RunService.RenderStepped:Connect(function()
+            if dragging then
+                local delta = UIS:GetMouseLocation() - dragStart
+                frame.Position = UDim2.new(
+                    startPos.X.Scale,
+                    startPos.X.Offset + delta.X,
+                    startPos.Y.Scale,
+                    startPos.Y.Offset + delta.Y
+                )
+            end
+        end)
+    end
 
 end)()
